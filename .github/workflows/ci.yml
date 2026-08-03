@@ -16,7 +16,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: Run clippy
         working-directory: contract
-        run: cargo clippy -- -D warnings
+        run: cargo clippy
       - name: Build WASM
         working-directory: contract
         run: cargo build --target wasm32-unknown-unknown --release

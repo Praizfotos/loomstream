@@ -19,10 +19,7 @@ pub fn set_streams_map(env: &Env, maps: &Map<u64, types::Stream>) {
 pub fn get_next_stream_id(env: &Env) -> u64 {
     let key = Symbol::new(env, "next_stream_id");
     let instance = env.storage().instance();
-    match instance.get(&key) {
-        Some(id) => id,
-        None => 0u64,
-    }
+    instance.get(&key).unwrap_or_default()
 }
 
 pub fn set_next_stream_id(env: &Env, id: u64) {
@@ -46,10 +43,7 @@ pub fn set_admin(env: &Env, admin: &Address) {
 pub fn is_paused(env: &Env) -> bool {
     let key = Symbol::new(env, "paused");
     let instance = env.storage().instance();
-    match instance.get(&key) {
-        Some(p) => p,
-        None => false,
-    }
+    instance.get(&key).unwrap_or_default()
 }
 
 pub fn set_paused(env: &Env, paused: bool) {
