@@ -54,7 +54,7 @@ export async function upsertEvent(prisma: PrismaClient, event: IndexedEvent) {
       streamId: event.streamId,
       eventType: event.eventType,
       topics: event.topics,
-      data: event.data as any,
+      data: event.data as Record<string, unknown>,
       txHash: event.txHash,
       ledgerSeq: event.ledgerSeq,
       createdAt: event.createdAt,

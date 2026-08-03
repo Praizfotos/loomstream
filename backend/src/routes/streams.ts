@@ -25,7 +25,7 @@ export function streamRoutes(prisma: PrismaClient) {
     const { role, address, status, page, limit } = parsed.data;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
     if (address) {
       if (role === "sender" || !role) {

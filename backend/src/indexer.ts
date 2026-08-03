@@ -17,7 +17,7 @@ const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL || "5000", 1
 const MAX_PAGE_SIZE = 100;
 
 async function fetchEvents(cursor: string | null): Promise<{
-  events: any[];
+  events: Record<string, unknown>[];
   nextCursor: string | null;
   more: boolean;
 }> {
@@ -48,12 +48,13 @@ async function fetchEvents(cursor: string | null): Promise<{
     throw new Error(`RPC error: ${res.status} ${res.statusText}`);
   }
 
-  const json = await res.json() as any;
-  if (json.error) {
-    throw new Error(`RPC error: ${json.error.message}`);
+  const json = (await res.json()) as Record<string, unknown>;
+  const error = json.error as Record<string, unknown> | null;
+  if (error) {
+    throw new Error(`RPC error: ${error.message}`);
   }
 
-  const result = json.result as any;
+  const result = json.result as Record<string, unknown>;
   return {
     events: result.events || [],
     nextCursor: result.nextCursor || null,
@@ -65,6 +66,7 @@ async function processEvents() {
   let cursor = await getIndexerCursor(prisma);
   let processed = 0;
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { events, nextCursor, more } = await fetchEvents(cursor);
 
@@ -141,6 +143,7 @@ async function main() {
   await prisma.$connect();
   logger.info("Indexer started");
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       await processEvents();
