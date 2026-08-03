@@ -26,16 +26,17 @@ export function streamRoutes(prisma: PrismaClient) {
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {};
-
+    const orArray: unknown[] = [];
     if (address) {
       if (role === "sender" || !role) {
-        where.OR = where.OR || [];
-        where.OR.push({ sender: address });
+        orArray.push({ sender: address });
       }
       if (role === "recipient" || !role) {
-        where.OR = where.OR || [];
-        where.OR.push({ recipient: address });
+        orArray.push({ recipient: address });
       }
+    }
+    if (orArray.length > 0) {
+      where.OR = orArray;
     }
 
     if (status === "active") {

@@ -17,7 +17,7 @@ const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL || "5000", 1
 const MAX_PAGE_SIZE = 100;
 
 async function fetchEvents(cursor: string | null): Promise<{
-  events: Record<string, unknown>[];
+  events: unknown[];
   nextCursor: string | null;
   more: boolean;
 }> {
@@ -48,16 +48,16 @@ async function fetchEvents(cursor: string | null): Promise<{
     throw new Error(`RPC error: ${res.status} ${res.statusText}`);
   }
 
-  const json = (await res.json()) as Record<string, unknown>;
+  const json = await res.json() as Record<string, unknown>;
   const error = json.error as Record<string, unknown> | null;
   if (error) {
-    throw new Error(`RPC error: ${error.message}`);
+    throw new Error(`RPC error: ${String(error.message)}`);
   }
 
   const result = json.result as Record<string, unknown>;
   return {
-    events: result.events || [],
-    nextCursor: result.nextCursor || null,
+    events: (result.events as unknown[]) || [],
+    nextCursor: (result.nextCursor as string) || null,
     more: result.more !== false,
   };
 }
@@ -78,17 +78,18 @@ async function processEvents() {
 
     for (const event of events) {
       try {
-        const topics = event.topics || [];
-        const eventType = topics[0] as string || "unknown";
+        const e = event as Record<string, unknown>;
+        const topics = (e.topics as unknown[]) || [];
+        const eventType = (topics[0] as string) || "unknown";
 
         const indexed: IndexedEvent = {
-          streamId: topics[1] != null ? parseInt(topics[1], 10) : 0,
+          streamId: topics[1] != null ? parseInt(String(topics[1]), 10) : 0,
           eventType,
           topics: topics.map((t: unknown) => String(t)),
-          data: event.body || {},
-          txHash: event.transactionHash || "",
-          ledgerSeq: event.ledgerSeq || 0,
-          createdAt: new Date(event.createdAt || Date.now()),
+          data: (e.body as Record<string, unknown>) || {},
+          txHash: (e.transactionHash as string) || "",
+          ledgerSeq: (e.ledgerSeq as number) || 0,
+          createdAt: new Date((e.createdAt as string) || Date.now()),
         };
 
         await upsertEvent(prisma, indexed);
@@ -105,7 +106,8 @@ async function processEvents() {
           }
         } else if (eventType === "StreamWithdraw") {
           const streamId = indexed.streamId;
-          const amount = BigInt(event.body?.amount || "0");
+          const body = (e.body as Record<string, unknown>) || {};
+          const amount = BigInt(body.amount as string || "0");
           if (streamId && amount > 0n) {
             await prisma.stream.update({
               where: { streamId },
