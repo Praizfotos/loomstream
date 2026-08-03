@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Stream {
+  streamId        Int      @id @map("stream_id")
+  sender          String   @map("sender")
+  recipient       String   @map("recipient")
+  token           String   @map("token")
+  deposit         BigInt   @map("deposit")
+  startTime       Int      @map("start_time")
+  endTime         Int      @map("end_time")
+  cliffTime       Int      @map("cliff_time")
+  cancelable      Boolean  @map("cancelable")
+  canceled        Boolean  @default(false) @map("canceled")
+  withdrawnAmount BigInt   @default(0) @map("withdrawn_amount")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  events          StreamEvent[]
+
+  @@map("streams")
+}
+
+model StreamEvent {
+  id        Int      @id @default(autoincrement())
+  streamId  Int      @map("stream_id")
+  eventType String   @map("event_type")
+  topics    String[]
+  data      Json
+  txHash    String   @map("tx_hash")
+  ledgerSeq Int      @map("ledger_seq")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stream Stream @relation(fields: [streamId], references: [streamId])
+
+  @@unique([streamId, txHash, ledgerSeq])
+  @@map("stream_events")
+}
+
+model IndexerCursor {
+  id       String @id @default("global")
+  cursor   String
+  updatedAt DateTime @updatedAt
+
+  @@map("indexer_cursor")
+}

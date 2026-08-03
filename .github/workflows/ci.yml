@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: stellar/setup-soroban@v1
+        with:
+          soroban-version: latest
+      - name: Install wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Run contract tests
+        working-directory: contract
+        run: cargo test --features testutils
+      - name: Run clippy
+        working-directory: contract
+        run: cargo clippy --features testutils -- -D warnings
+      - name: Build WASM
+        working-directory: contract
+        run: cargo build --target wasm32-unknown-unknown --release
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loomstream.wasm
+          path: contract/target/wasm32-unknown-unknown/release/loomstream.wasm
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Type check
+        working-directory: backend
+        run: npm run typecheck
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+      - name: Run tests
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Type check
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [contract, backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Docker image
+        run: docker build -t loomstream:latest .

@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: loomstream
+      POSTGRES_PASSWORD: loomstream
+      POSTGRES_DB: loomstream
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loomstream"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://loomstream:loomstream@postgres:5432/loomstream
+      - PORT=3000
+      - LOG_LEVEL=info
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  indexer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: sh -c "while true; do node backend/dist/indexer.js; sleep 5; done"
+    environment:
+      - DATABASE_URL=postgresql://loomstream:loomstream@postgres:5432/loomstream
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org:443}
+      - CONTRACT_ID=${CONTRACT_ID}
+      - LOG_LEVEL=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
