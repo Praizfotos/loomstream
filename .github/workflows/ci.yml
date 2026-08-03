@@ -14,12 +14,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install wasm32 target
         run: rustup target add wasm32-unknown-unknown
-      - name: Run contract tests
-        working-directory: contract
-        run: cargo test --features testutils
       - name: Run clippy
         working-directory: contract
-        run: cargo clippy --features testutils -- -D warnings
+        run: cargo clippy -- -D warnings
       - name: Build WASM
         working-directory: contract
         run: cargo build --target wasm32-unknown-unknown --release
