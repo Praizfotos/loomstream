@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 export interface IndexedEvent {
   streamId: number;
@@ -54,7 +54,7 @@ export async function upsertEvent(prisma: PrismaClient, event: IndexedEvent) {
       streamId: event.streamId,
       eventType: event.eventType,
       topics: event.topics,
-      data: event.data as Prisma.InputJsonValue,
+      data: event.data as any,
       txHash: event.txHash,
       ledgerSeq: event.ledgerSeq,
       createdAt: event.createdAt,
