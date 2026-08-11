@@ -8,6 +8,7 @@ RUN npm run build
 FROM node:24-alpine AS backend-build
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json ./
+COPY backend/prisma ./prisma
 RUN npm ci
 COPY backend/ .
 RUN npm run build
