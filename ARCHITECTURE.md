@@ -91,10 +91,32 @@ The indexer is a standalone worker process that:
 
 ```
 GET  /api/streams          — list streams (filter by role/address/status, paginated)
-GET  /api/streams/:id      — get stream details with events
+GET  /api/streams/:id      — get stream details with events and derived status
 GET  /api/streams/:id/events — get events for a stream
 GET  /health               — health check
 ```
+
+### Stream Lifecycle Status
+
+Every stream response carries a server-derived `status` field. The status is **computed off-chain** from the stream's existing on-chain fields (`start_time`, `end_time`, `cliff_time`, `canceled`) and the current time. It is never stored and never re-derived differently by the frontend — the API is the single source of truth for display.
+
+| Status | Condition |
+|--------|-----------|
+| `UPCOMING` | `now < start_time` |
+| `CLIFF` | `now >= start_time` and `cliff_time > start_time` and `now < cliff_time` |
+| `ACTIVE` | started, past any cliff, and `now < end_time` |
+| `FULLY_VESTED` | `now >= end_time` and not canceled |
+| `CANCELED` | `canceled == true` (takes precedence over time-based states) |
+
+Boundary conditions: at exactly `start_time` the stream is considered started; at exactly `cliff_time` the cliff is considered elapsed; at exactly `end_time` the stream is `FULLY_VESTED`. A cliff is only meaningful when `cliff_time > start_time`; otherwise the stream vests immediately and never enters the `CLIFF` state.
+
+The status model and vesting math live in `backend/src/domain/streamStatus.ts`:
+
+- `deriveStreamStatus` — deterministic status derivation from stream fields + current time
+- `computeVestedAmount` / `computeStreamAmounts` — display amounts (`vestedAmount`, `withdrawableAmount`, `remainingAmount`) mirroring the contract's vesting formula
+- `serializeStream` — converts a Prisma stream row into the API wire format with `status` and amounts
+
+Current time is taken as the request-time Unix timestamp, which tracks Soroban ledger time. The Soroban contract remains the authoritative source for actual balances; these derived fields are a read-only display view.
 
 ### Database Schema
 
@@ -136,13 +158,15 @@ indexer_cursor (
 ### Pages
 
 - `/` — Landing page with links to dashboard and create stream
-- `/dashboard` — Stream list with real-time withdrawable amounts, progress bars, cliff indicators
+- `/dashboard` — Stream list rendering backend-derived status, vesting progress, withdrawable and remaining amounts
 - `/create` — Create stream form with client-side validation and simulation
+- `/streams/[id]` — Stream details view with status, progress, balances, schedule, and events
 
 ### Components
 
 - `WalletConnect` — Stellar Wallet Kit integration (Freighter)
-- `StreamCard` — Displays stream details, progress bar, actions
+- `StreamCard` — Displays stream details consuming the backend-provided `status`, progress, and balances
+- `StreamStatusBadge` — Visual treatment for each lifecycle status (UPCOMING, CLIFF, ACTIVE, FULLY_VESTED, CANCELED)
 - `CreateStreamForm` — Form with Zod validation, simulation before signing
 - `WithdrawDialog` — Withdraw flow with loading/error/success states
 - `CancelDialog` — Cancel flow with confirmation

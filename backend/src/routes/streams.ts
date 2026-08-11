@@ -1,17 +1,39 @@
 import { Router, Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import {
+  serializeStream,
+  SerializedStream,
+} from "../domain/streamStatus";
 
-const StreamStatusSchema = z.enum(["active", "canceled", "completed"]);
+const LEGACY_STATUS_SCHEMA = z.enum(["active", "canceled", "completed"]);
+const StreamStatusFilterSchema = z.union([
+  LEGACY_STATUS_SCHEMA,
+  z.enum(["UPCOMING", "CLIFF", "ACTIVE", "FULLY_VESTED", "CANCELED"]),
+]);
 const RoleSchema = z.enum(["sender", "recipient"]);
 
 const ListQuerySchema = z.object({
   role: RoleSchema.optional(),
   address: z.string().optional(),
-  status: StreamStatusSchema.optional(),
+  status: StreamStatusFilterSchema.optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
+
+function currentLedgerTimeSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function matchesStatus(stream: SerializedStream, status: string): boolean {
+  if (status === "active" || status === "completed") {
+    return stream.canceled === false;
+  }
+  if (status === "canceled") {
+    return stream.canceled === true;
+  }
+  return stream.status === status;
+}
 
 export function streamRoutes(prisma: PrismaClient) {
   const router = Router();
@@ -39,11 +61,31 @@ export function streamRoutes(prisma: PrismaClient) {
       where.OR = orArray;
     }
 
-    if (status === "active") {
-      where.canceled = false;
-    } else if (status === "canceled") {
+    const isNewStatus =
+      status === "UPCOMING" ||
+      status === "CLIFF" ||
+      status === "ACTIVE" ||
+      status === "FULLY_VESTED" ||
+      status === "CANCELED";
+
+    const now = currentLedgerTimeSeconds();
+
+    if (isNewStatus) {
+      const streams = await prisma.stream.findMany({ where, orderBy: { createdAt: "desc" } });
+      const filtered = streams
+        .map((stream) => serializeStream(stream, now))
+        .filter((stream) => matchesStatus(stream, status));
+      const total = filtered.length;
+      const data = filtered.slice(skip, skip + limit);
+      return res.json({
+        data,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      });
+    }
+
+    if (status === "canceled") {
       where.canceled = true;
-    } else if (status === "completed") {
+    } else if (status === "active" || status === "completed") {
       where.canceled = false;
     }
 
@@ -53,7 +95,7 @@ export function streamRoutes(prisma: PrismaClient) {
     ]);
 
     return res.json({
-      data: streams,
+      data: streams.map((stream) => serializeStream(stream, now)),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
   });
@@ -73,7 +115,11 @@ export function streamRoutes(prisma: PrismaClient) {
       return res.status(404).json({ error: "Stream not found" });
     }
 
-    return res.json({ data: stream });
+    const now = currentLedgerTimeSeconds();
+    const { events, ...rest } = stream;
+    const serialized = serializeStream(rest, now);
+
+    return res.json({ data: { ...serialized, events } });
   });
 
   router.get("/:id/events", async (req: Request, res: Response) => {

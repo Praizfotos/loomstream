@@ -108,6 +108,7 @@ Open `http://localhost:3000`.
 
 - **Custody model**: The contract holds tokens in custody. Tokens are pulled from the sender on stream creation and released to the recipient on withdrawal. Funds are never freezable by an admin — the pause circuit breaker only blocks new stream creation.
 - **Vesting math**: Linear vesting with configurable cliff. Balance is derived from `env.ledger().timestamp()`, never caller-supplied time.
+- **Stream status**: Every stream API response includes a server-derived `status` (`UPCOMING`, `CLIFF`, `ACTIVE`, `FULLY_VESTED`, or `CANCELED`) computed from the stream's on-chain timestamps, cancellation state, and current time. The frontend consumes this status from the API rather than re-deriving it. See [ARCHITECTURE.md](ARCHITECTURE.md) and [API.md](API.md) for the derivation rules and wire format.
 - **Events**: `StreamCreated`, `StreamWithdraw`, `StreamCanceled` with indexed topics for off-chain indexing.
 - **TTL**: Persistent storage with TTL bump on every touch.
 
